@@ -1,0 +1,325 @@
+[23bcs115@mepcolinux ~]$cat hpc61.c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <pthread.h>
+
+#define BUFFER_SIZE 10
+#define WORD_LEN 50
+#define THREADS 3
+
+char *dictionary[] = {"apple","banana","orange","grape","mango","computer","science","hello","world"};
+int dict_size = 9;
+
+char buffer[BUFFER_SIZE][WORD_LEN];
+int count = 0;
+int done = 0;  // flag to indicate no more words will be added
+
+pthread_mutex_t lock;
+pthread_cond_t not_empty;
+pthread_cond_t not_full;
+
+int spell_check(char *word)
+{
+    for(int i = 0; i < dict_size; i++)
+    {
+        if(strcmp(dictionary[i], word) == 0)
+            return 1;  // word is in dictionary
+    }
+    return 0;  // word not found
+}
+
+void* spell_checker(void *arg)
+{
+    char word[WORD_LEN];
+    while(1)
+    {
+        pthread_mutex_lock(&lock);
+        while(count == 0 && !done)
+            pthread_cond_wait(&not_empty, &lock);
+
+        if(count == 0 && done) {
+            pthread_mutex_unlock(&lock);
+            break;
+        }
+
+        strcpy(word, buffer[count - 1]);
+        count--;
+        pthread_cond_signal(&not_full);
+        pthread_mutex_unlock(&lock);
+
+        int correct = spell_check(word);
+
+        pthread_mutex_lock(&lock);
+        if(correct)
+            printf("%s -> Correct\n", word);
+        else
+            printf("%s -> Incorrect\n", word);
+        pthread_mutex_unlock(&lock);
+    }
+    return NULL;
+}
+
+int main()
+{
+    pthread_t workers[THREADS];
+    pthread_mutex_init(&lock, NULL);
+    pthread_cond_init(&not_empty, NULL);
+    pthread_cond_init(&not_full, NULL);
+
+    printf("*** Spell Checker Using Pthread Synchronization *** - CASE SENSITIVE\n");
+
+    // Print available dictionary
+    printf("Dictionary available:\n");
+    for(int i = 0; i < dict_size; i++)
+        printf(" - %s\n", dictionary[i]);
+    printf("\n");
+
+    int n;
+    printf("Enter number of words to check: ");
+    scanf("%d", &n);
+
+    for(int i = 0; i < THREADS; i++)
+        pthread_create(&workers[i], NULL, spell_checker, NULL);
+
+    printf("Enter words one by one:\n");
+    for(int i = 0; i < n; i++)
+    {
+        char word[WORD_LEN];
+        scanf("%s", word);
+
+        pthread_mutex_lock(&lock);
+        while(count == BUFFER_SIZE)
+            pthread_cond_wait(&not_full, &lock);
+        strcpy(buffer[count++], word);
+        pthread_cond_signal(&not_empty);
+        pthread_mutex_unlock(&lock);
+    }
+
+    // Notify workers no more words will be added
+    pthread_mutex_lock(&lock);
+    done = 1;
+    pthread_cond_broadcast(&not_empty);
+    pthread_mutex_unlock(&lock);
+
+    for(int i = 0; i < THREADS; i++)
+        pthread_join(workers[i], NULL);
+
+    pthread_mutex_destroy(&lock);
+    pthread_cond_destroy(&not_empty);
+    pthread_cond_destroy(&not_full);
+
+    return 0;
+}
+[23bcs115@mepcolinux ~]$g++ hpc61.c -lpthread
+[23bcs115@mepcolinux ~]$./a.out
+*** Spell Checker Using Pthread Synchronization *** - CASE SENSITIVE
+Dictionary available:
+ - apple
+ - banana
+ - orange
+ - grape
+ - mango
+ - computer
+ - science
+ - hello
+ - world
+
+Enter number of words to check: 5
+Enter words one by one:
+mango
+mango -> Correct
+grape
+grape -> Correct
+xylophone
+xylophone -> Incorrect
+Apple
+Apple -> Incorrect
+banana
+banana -> Correct
+[23bcs115@mepcolinux ~]$cat hpc62.c
+#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include <unistd.h>
+
+int pending_submissions = 0;
+int max_limit = 0;
+int evaluation_done = 0;
+
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t cond_evaluator = PTHREAD_COND_INITIALIZER;
+pthread_cond_t cond_submitter = PTHREAD_COND_INITIALIZER;
+void* student_submitter(void* arg) {
+    char input;
+    printf("\n--- COMMANDS ---\nType 's' to SUBMIT a script or 'q' to End.\n----------------\n");
+    
+    while (1) {
+        scanf(" %c", &input); 
+
+        if (input == 's' || input == 'S') {
+            pthread_mutex_lock(&mutex);
+            
+            while (pending_submissions >= max_limit) {
+                printf("[System] LIMIT REACHED (%d). Waiting for evaluator...\n", max_limit);
+                pthread_cond_wait(&cond_submitter, &mutex);
+            }
+
+            pending_submissions++;
+            printf("[Student] Submission successful! Pending: %d\n", pending_submissions);
+
+            pthread_cond_signal(&cond_evaluator);
+            pthread_mutex_unlock(&mutex);
+        }
+        else if (input == 'q' || input == 'Q') {
+            printf("[System] Exiting program...\n");
+            exit(0);
+        }
+        else {
+            printf("[System] Invalid command. Use 's' to submit.\n");
+        }
+    }
+    return NULL;
+}
+void* evaluator(void* arg) {
+    while (1) {
+        pthread_mutex_lock(&mutex);
+        while (pending_submissions == 0) {
+            pthread_cond_wait(&cond_evaluator, &mutex);
+        }
+
+        printf("[Evaluator] Starting evaluation...\n");
+        pthread_mutex_unlock(&mutex);
+
+        sleep(3);  // simulate evaluation time
+
+        pthread_mutex_lock(&mutex);
+        pending_submissions--;
+        evaluation_done = 1;
+        printf("[Evaluator] Finished evaluation. Remaining in queue: %d\n", pending_submissions);
+
+        pthread_cond_signal(&cond_submitter);
+        pthread_mutex_unlock(&mutex);
+    }
+    return NULL;
+}
+void* monitor(void* arg) {
+    int last_seen = -1;
+
+    while (1) {
+        pthread_mutex_lock(&mutex);
+        if (pending_submissions != last_seen) {
+            printf("\n[Monitor] Queue Status: %d scripts waiting.\n", pending_submissions);
+            last_seen = pending_submissions;
+        }
+        pthread_mutex_unlock(&mutex);
+        usleep(500000);  // 0.5 seconds
+    }
+    return NULL;
+}
+void* result_publisher(void* arg) {
+    while (1) {
+        pthread_mutex_lock(&mutex);
+        if (evaluation_done) {
+            printf("[Publisher] Result published for an evaluated script.\n");
+            evaluation_done = 0;
+        }
+        pthread_mutex_unlock(&mutex);
+        usleep(100000);  // 0.1 seconds
+    }
+    return NULL;
+}
+int main() {
+    pthread_t t1, t2, t3, t4;
+
+    printf("Enter the MAX capacity of the submission queue: ");
+    scanf("%d", &max_limit);
+
+    pthread_create(&t1, NULL, student_submitter, NULL);
+    pthread_create(&t2, NULL, evaluator, NULL);
+    pthread_create(&t3, NULL, monitor, NULL);
+    pthread_create(&t4, NULL, result_publisher, NULL);
+
+    pthread_join(t1, NULL);
+    pthread_join(t2, NULL);
+    pthread_join(t3, NULL);
+    pthread_join(t4, NULL);
+
+    return 0;
+}
+[23bcs115@mepcolinux ~]$g++ hpc62.c -lpthread
+[23bcs115@mepcolinux ~]$./a.out
+Enter the MAX capacity of the submission queue: 3
+
+--- COMMANDS ---
+Type 's' to SUBMIT a script or 'q' to End.
+----------------
+
+[Monitor] Queue Status: 0 scripts waiting.
+s
+[Student] Submission successful! Pending: 1
+[Evaluator] Starting evaluation...
+s
+[Monitor] Queue Status: 1 scripts waiting.
+
+[Student] Submission successful! Pending: 2
+s
+[Monitor] Queue Status: 2 scripts waiting.
+
+[Student] Submission successful! Pending: 3
+
+[Monitor] Queue Status: 3 scripts waiting.
+s
+[System] LIMIT REACHED (3). Waiting for evaluator...
+[Evaluator] Finished evaluation. Remaining in queue: 2
+[Evaluator] Starting evaluation...
+[Student] Submission successful! Pending: 3
+[Publisher] Result published for an evaluated script.
+s
+[System] LIMIT REACHED (3). Waiting for evaluator...
+s
+s
+[Evaluator] Finished evaluation. Remaining in queue: 2
+[Evaluator] Starting evaluation...
+[Student] Submission successful! Pending: 3
+[System] LIMIT REACHED (3). Waiting for evaluator...
+[Publisher] Result published for an evaluated script.
+[Evaluator] Finished evaluation. Remaining in queue: 2
+[Evaluator] Starting evaluation...
+[Student] Submission successful! Pending: 3
+[System] LIMIT REACHED (3). Waiting for evaluator...
+[Publisher] Result published for an evaluated script.
+[Evaluator] Finished evaluation. Remaining in queue: 2
+[Evaluator] Starting evaluation...
+[Student] Submission successful! Pending: 3
+[Publisher] Result published for an evaluated script.
+[Evaluator] Finished evaluation. Remaining in queue: 2
+[Evaluator] Starting evaluation...
+[Publisher] Result published for an evaluated script.
+
+[Monitor] Queue Status: 2 scripts waiting.
+[Evaluator] Finished evaluation. Remaining in queue: 1
+[Evaluator] Starting evaluation...
+[Publisher] Result published for an evaluated script.
+
+[Monitor] Queue Status: 1 scripts waiting.
+[Evaluator] Finished evaluation. Remaining in queue: 0
+[Publisher] Result published for an evaluated script.
+
+[Monitor] Queue Status: 0 scripts waiting.
+s
+[Student] Submission successful! Pending: 1
+[Evaluator] Starting evaluation...
+
+[Monitor] Queue Status: 1 scripts waiting.
+[Evaluator] Finished evaluation. Remaining in queue: 0
+
+[Monitor] Queue Status: 0 scripts waiting.
+[Publisher] Result published for an evaluated script.
+q
+[System] Exiting program...
+[23bcs115@mepcolinux ~]$exit
+exit
+
+Script done on Wednesday 25 March 2026 04:19:45 PM IST
+

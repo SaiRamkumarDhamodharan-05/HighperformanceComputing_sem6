@@ -1,0 +1,84 @@
+Script started on 2026-02-04 15:35:00+0530
+To run a command as administrator (user "root"), use "sudo <command>".
+See "man sudo_root" for details.
+
+III-B2@cil31~$ cat mp.c
+#include<stdio.h>
+#include<stdlib.h>
+#include<mpi.h>
+#include<time.h>
+int main()
+{
+	int rank,size,key,N;
+	int local_count=0,total_count=0;
+	int *array;
+	int *sub_array;
+	MPI_Init(NULL,NULL);
+	MPI_Comm_rank(MPI_COMM_WORLD,&rank);
+	MPI_Comm_size(MPI_COMM_WORLD,&size);
+	//int elements_per_process=N/size;
+	//sub_array=(int*)malloc(elements_per_process*sizeof(int));
+	if(rank==0)
+	{
+                printf("Enter no. of array elements:");
+                fflush(stdout);
+                scanf("%d",&N);
+                if(N%size !=0){printf("\nTotal elements must be divisible by no. of processes"); fflush(stdout); MPI_Abort(MPI_COMM_WORLD,1);}
+		array=(int*)malloc(N*sizeof(int));
+		srand(time(NULL));
+		for(int i=0;i<N;i++)
+		{
+			array[i]=rand()%10;
+			printf("%d ",array[i]);
+		}
+		printf("\nEnter a number to find the frequency:");
+		fflush(stdout);
+		scanf("%d",&key);
+	}
+	MPI_Bcast(&N,1,MPI_INT,0,MPI_COMM_WORLD);
+        int elements_per_process=N/size;
+        sub_array=(int*)malloc(elements_per_process*sizeof(int));
+	MPI_Bcast(&key,1,MPI_INT,0,MPI_COMM_WORLD);
+	MPI_Scatter(array,elements_per_process,MPI_INT,sub_array,elements_per_process,MPI_INT,0,MPI_COMM_WORLD);
+	for(int i=0;i<elements_per_process;i++)
+	{
+		if(sub_array[i]==key)
+			local_count++;
+	}
+	printf("Process %d found %d %d times\n",rank,key,local_count);
+	MPI_Reduce(&local_count,&total_count,1,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
+	if(rank==0)
+	{
+		printf("Total Frequency of key %d is %d\n",key,total_count);
+		free(array);
+	}
+	free(sub_array);
+	MPI_Finalize();
+	return 0;
+}
+III-B2@cil31~$ mpicc mp.c
+III-B2@cil31~$ mpirun -np 4 ./a.out
+Enter no. of array elements:40
+4 8 8 6 4 6 5 7 4 0 7 8 7 7 2 5 9 3 6 6 5 2 4 5 7 0 5 2 7 7 8 1 8 8 7 2 4 2 2 1 
+Enter a number to find the frequency:6
+Process 1 found 6 2 times
+Process 2 found 6 0 times
+Process 3 found 6 0 times
+Process 0 found 6 2 times
+Total Frequency of key 6 is 4
+III-B2@cil31~$ mpirun -np 4 ./a.out
+Enter no. of array elements:34
+--------------------------------------------------------------------------
+MPI_ABORT was invoked on rank 0 in communicator MPI_COMM_WORLD
+with errorcode 1.
+
+NOTE: invoking MPI_ABORT causes Open MPI to kill all MPI processes.
+You may or may not see output from other processes, depending on
+exactly when Open MPI kills them.
+--------------------------------------------------------------------------
+
+Total elements must be divisible by no. of processes$ 
+III-B2@cil31~$ exit
+exit
+
+

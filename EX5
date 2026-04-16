@@ -1,0 +1,295 @@
+Script started on Wednesday 18 February 2026 04:13:05 PM IST
+[23bcs115@mepcolinux ex5]$cat pthread.c
+#include<stdio.h>
+#include<stdlib.h>
+#include<pthread.h>
+int thread_count;
+int num=10;
+void *Hello(void* rank);
+int main(int argc,char *argv[])
+{
+   long thread;
+   pthread_t* thread_handles;
+   thread_count=strtol(argv[1],NULL,10);
+   thread_handles=(pthread_t*)malloc(thread_count*sizeof(pthread_t));
+   for(thread=0;thread<thread_count;thread++)
+      pthread_create(&thread_handles[thread],NULL,Hello,(void*)thread);
+   printf("Hello from the main thread \n",num);
+   for(thread=0;thread<thread_count;thread++)
+      pthread_join(thread_handles[thread],NULL);
+   free(thread_handles);
+   return 0;
+   }
+void* Hello(void* rank)
+{
+  
+   long my_rank=(long)rank;
+   printf("Hello from thread %d of %d\n",my_rank,thread_count);
+}
+[23bcs115@mepcolinux ex5]$cc pthread.c -l pthread
+[23bcs115@mepcolinux ex5]$.a/.out 7
+bash: .a/.out: No such file or directory
+[23bcs115@mepcolinux ex5]$.a/.out 7
+Hello from thread 0 of 7
+Hello from thread 3 of 7
+Hello from thread 2 of 7
+Hello from thread 1 of 7
+Hello from thread 4 of 7
+Hello from thread 5 of 7
+Hello from the main thread 
+Hello from thread 6 of 7
+[23bcs115@mepcolinux ex5]$cat sum.c
+#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+
+#define MAX 100
+
+int arr[MAX];
+int n;
+int partial_sum[MAX] = {0};
+int thread_count;
+
+void* sumArray(void* arg) {
+
+    int id = *(int*)arg;   // get thread id
+    int part = n / thread_count;
+
+    int start = id * part;
+    int end;
+
+    if(id == thread_count-1)
+        end = n;     
+    else
+        end = (id + 1) * part;
+    for(int i = start; i < end; i++) {
+        partial_sum[id] += arr[i];
+    }
+    printf("\nSum by thread %d: %d\n",id,partial_sum[id]);
+    pthread_exit(NULL);
+}
+
+int main(int argc,char *argv[]) {
+    
+    thread_count=strtol(argv[1],NULL,10);    
+    pthread_t threads[thread_count];
+    int thread_id[thread_count];
+
+    printf("Enter number of elements: ");
+    scanf("%d", &n);
+
+    srand(time(NULL));
+    for(int i = 0; i < n; i++) {
+        arr[i]=rand()%100;
+    }
+    for(int i=0;i<n;i++) printf("%d ",arr[i]);
+
+    for(int i = 0; i < thread_count; i++) {
+        thread_id[i] = i;
+        pthread_create(&threads[i], NULL, sumArray, &thread_id[i]);
+    }
+
+    // Wait for threads
+    for(int i = 0; i < thread_count; i++) {
+        pthread_join(threads[i], NULL);
+    }
+
+    int total = 0;
+    for(int i = 0; i < thread_count; i++) {
+        total += partial_sum[i];
+    }
+
+    printf("\nFinal Sum = %d\n", total);
+
+    return 0;
+}
+[23bcs115@mepcolinux ex5]$g++ sum.c -l pthread
+[23bcs115@mepcolinux ex5]$./a.out 6
+Enter number of elements: 30
+23 38 78 20 71 58 70 50 63 32 57 64 61 84 71 1 14 97 45 78 90 73 40 67 10 36 89 55 44 65 
+Sum by thread 0: 230
+
+Sum by thread 3: 235
+
+Sum by thread 1: 273
+
+Sum by thread 4: 280
+
+Sum by thread 2: 337
+
+Sum by thread 5: 289
+
+Final Sum = 1644
+[23bcs115@mepcolinux ex5]$cat matrix.c
+#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include <time.h>
+
+#define MAX 10
+
+int A[MAX][MAX], B[MAX][MAX];
+int add[MAX][MAX], mul[MAX][MAX];
+int r1, c1, r2, c2;
+
+void* matrixAddition(void* arg) {
+
+    for(int i = 0; i < r1; i++) {
+        for(int j = 0; j < c1; j++) {
+            add[i][j] = A[i][j] + B[i][j];
+        }
+    }
+
+    printf("\nMatrix Addition Result:\n");
+    for(int i = 0; i < r1; i++) {
+        for(int j = 0; j < c1; j++) {
+            printf("%d ", add[i][j]);
+        }
+        printf("\n");
+    }
+
+    pthread_exit(NULL);
+}
+
+void* matrixMultiplication(void* arg) {
+
+    for(int i = 0; i < r1; i++) {
+        for(int j = 0; j < c2; j++) {
+            mul[i][j] = 0;
+            for(int k = 0; k < c1; k++) {
+                mul[i][j] += A[i][k] * B[k][j];
+            }
+        }
+    }
+
+    printf("\nMatrix Multiplication Result:\n");
+    for(int i = 0; i < r1; i++) {
+        for(int j = 0; j < c2; j++) {
+            printf("%d ", mul[i][j]);
+        }
+        printf("\n");
+    }
+
+    pthread_exit(NULL);
+}
+
+int main() {
+
+    pthread_t t1, t2;
+
+    printf("Enter rows and columns of Matrix A: ");
+    scanf("%d %d", &r1, &c1);
+
+    printf("Enter rows and columns of Matrix B: ");
+    scanf("%d %d", &r2, &c2);
+
+    if(r1 != r2 || c1 != c2) {
+        printf("\nMatrix Addition not possible (Dimensions must be same)\n");
+        return 0;
+    }
+
+    if(c1 != r2) {
+        printf("\nMatrix Multiplication not possible (c1 must equal r2)\n");
+        return 0;
+    }
+
+    srand(time(NULL));   // random seed
+
+    // Generate random numbers 0–100
+    for(int i = 0; i < r1; i++) {
+        for(int j = 0; j < c1; j++) {
+            A[i][j] = rand() % 101;
+        }
+    }
+
+    for(int i = 0; i < r2; i++) {
+        for(int j = 0; j < c2; j++) {
+            B[i][j] = rand() % 101;
+        }
+    }
+
+    printf("\nMatrix A:\n");
+    for(int i = 0; i < r1; i++) {
+        for(int j = 0; j < c1; j++) {
+            printf("%d ", A[i][j]);
+        }
+        printf("\n");
+    }
+
+    printf("\nMatrix B:\n");
+    for(int i = 0; i < r2; i++) {
+        for(int j = 0; j < c2; j++) {
+            printf("%d ", B[i][j]);
+        }
+        printf("\n");
+    }
+
+    // Create threads
+    pthread_create(&t1, NULL, matrixAddition, NULL);
+    pthread_create(&t2, NULL, matrixMultiplication, NULL);
+
+    pthread_join(t1, NULL);
+    pthread_join(t2, NULL);
+
+    return 0;
+}
+[23bcs115@mepcolinux ex5]$g++ matrix.c -l pthread
+[23bcs115@mepcolinux ex5]$./a.out
+Enter rows and columns of Matrix A: 3 3
+Enter rows and columns of Matrix B: 3 3
+
+Matrix A:
+17 79 26 
+74 13 29 
+51 100 28 
+
+Matrix B:
+5 38 75 
+34 44 7 
+48 71 44 
+
+Matrix Addition Result:
+22 117 101 
+108 57 36 
+99 171 72 
+
+Matrix Multiplication Result:
+4019 5968 2972 
+2204 5443 6917 
+4999 8326 5757 
+[23bcs115@mepcolinux ex5]$./a.out
+Enter rows and columns of Matrix A: 5 5
+Enter rows and columns of Matrix B: 5 5
+
+Matrix A:
+66 64 4 86 17 
+69 59 99 71 90 
+40 28 61 0 23 
+80 69 26 11 88 
+76 44 95 0 87 
+
+Matrix B:
+25 42 76 7 48 
+44 39 11 15 91 
+95 84 15 94 54 
+4 100 48 32 100 
+71 78 68 97 55 
+
+Matrix Addition Result:
+91 106 80 93 65 
+113 98 110 86 181 
+
+Matrix Multiplication Result:
+6397 15530 11064 6199 18743 135 
+20400 27635 16906 21676 26077 
+9660 9690 5827 8665 9027 
+13798 16199 13741 12927 17463 
+19038 19674 13601 18561 17567 
+112 76 94 77 
+84 169 74 43 188 
+147 122 163 97 142 
+[23bcs115@mepcolinux ex5]$exit
+exit
+
+Script done on Wednesday 18 February 2026 04:15:30 PM IST
+

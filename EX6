@@ -1,0 +1,180 @@
+Script started on Wednesday 18 March 2026 03:29:00 PM IST
+[23bcs115@mepcolinux ex6]$cat thr.c
+#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include <semaphore.h>
+#include <time.h>
+int num1, num2;
+char op;
+sem_t job_ready;
+sem_t job_done;
+
+FILE *fp;
+void *server(void *arg)
+{
+    char ops[] = {'+','-','*','/'};
+    srand(time(NULL));
+    for(int i = 0; i < 20; i++)
+    {
+        num1 = rand()%50 + 1;
+        num2 = rand()%50 + 1;
+        op = ops[rand()%4];
+        printf("Generated: %d %c %d\n", num1, op, num2);
+        sem_post(&job_ready);   
+        sem_wait(&job_done);  
+    }
+
+    pthread_exit(NULL);
+}
+void *add_thread(void *arg)
+{
+    pthread_t id=pthread_self();
+    while(1)
+    {
+        sem_wait(&job_ready);
+
+        if(op == '+')
+        {
+            int res = num1 + num2;
+            fprintf(fp,"thread %d : %d + %d = %d\n",id,num1,num2,res);
+            fflush(fp);
+            sem_post(&job_done);
+        }
+        else
+        {
+            sem_post(&job_ready);
+        }
+    }
+}
+void *sub_thread(void *arg)
+{
+    pthread_t id=pthread_self();
+    while(1)
+    {
+        sem_wait(&job_ready);
+
+        if(op == '-')
+        {
+            int res = num1 - num2;
+            fprintf(fp,"thread %d : %d - %d = %d\n",id,num1,num2,res);
+            fflush(fp);
+
+            sem_post(&job_done);
+        }
+        else
+        {
+            sem_post(&job_ready);
+        }
+    }
+}
+void *mul_thread(void *arg)
+{
+    pthread_t id=pthread_self();
+    while(1)
+    {
+        sem_wait(&job_ready);
+
+        if(op == '*')
+        {
+            int res = num1 * num2;
+            fprintf(fp,"thread %d : %d * %d = %d\n",id,num1,num2,res);
+            fflush(fp);
+
+            sem_post(&job_done);
+        }
+        else
+        {
+            sem_post(&job_ready);
+        }
+    }
+}
+void *div_thread(void *arg)
+{
+    pthread_t id=pthread_self();
+    while(1)
+    {
+        sem_wait(&job_ready);
+
+        if(op == '/')
+        {
+            if(num2 != 0)
+            {
+                float res = (float)num1 / num2;
+                fprintf(fp,"thread %d : %d / %d = %.2f\n",id,num1,num2,res);
+                fflush(fp);
+            }
+
+            sem_post(&job_done);
+        }
+        else
+        {
+            sem_post(&job_ready);
+        }
+    }
+}
+int main()
+{
+    pthread_t server_t, t1, t2, t3, t4;
+    srand(time(NULL));
+    fp = fopen("result.txt","w");
+    sem_init(&job_ready,0,0);
+    sem_init(&job_done,0,0);
+    pthread_create(&server_t,NULL,server,NULL);
+    pthread_create(&t1,NULL,add_thread,NULL);
+    pthread_create(&t2,NULL,sub_thread,NULL);
+    pthread_create(&t3,NULL,mul_thread,NULL);
+    pthread_create(&t4,NULL,div_thread,NULL);
+    pthread_join(server_t,NULL);
+    return 0;
+}
+
+
+[23bcs115@mepcolinux ex6]$g++ thr.c -lpthread
+[23bcs115@mepcolinux ex6]$./a.out
+Generated: 16 - 4
+Generated: 12 * 7
+Generated: 31 - 15
+Generated: 45 / 24
+Generated: 9 * 44
+Generated: 1 * 23
+Generated: 39 + 11
+Generated: 14 + 23
+Generated: 27 / 33
+Generated: 20 / 45
+Generated: 37 * 10
+Generated: 42 + 23
+Generated: 24 - 6
+Generated: 31 * 50
+Generated: 42 - 8
+Generated: 20 - 10
+Generated: 18 / 50
+Generated: 24 + 14
+Generated: 35 + 42
+Generated: 44 * 11
+[23bcs115@mepcolinux ex6]$cat result.txt
+thread 1403279104 : 16 - 4 = 12
+thread 1394886400 : 12 * 7 = 84
+thread 1403279104 : 31 - 15 = 16
+thread 1386493696 : 45 / 24 = 1.88
+thread 1394886400 : 9 * 44 = 396
+thread 1394886400 : 1 * 23 = 23
+thread 1411671808 : 39 + 11 = 50
+thread 1411671808 : 14 + 23 = 37
+thread 1386493696 : 27 / 33 = 0.82
+thread 1386493696 : 20 / 45 = 0.44
+thread 1394886400 : 37 * 10 = 370
+thread 1411671808 : 42 + 23 = 65
+thread 1403279104 : 24 - 6 = 18
+thread 1394886400 : 31 * 50 = 1550
+thread 1403279104 : 42 - 8 = 34
+thread 1403279104 : 20 - 10 = 10
+thread 1386493696 : 18 / 50 = 0.36
+thread 1411671808 : 24 + 14 = 38
+thread 1411671808 : 35 + 42 = 77
+thread 1394886400 : 44 * 11 = 484
+[23bcs115@mepcolinux ex6]$exit
+exit
+
+Script done on Wednesday 18 March 2026 03:29:40 PM IST
+

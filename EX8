@@ -1,0 +1,184 @@
+Script started on Wednesday 25 March 2026 03:16:46 PM IST
+[23bcs115@mepcolinux ex8]$cat p1.c
+#include <stdio.h>
+#include <omp.h>
+#define N 1000
+int main() {
+    printf("Addition of two Large Arrays\n");
+    int A[N], B[N], C[N];
+    for (int i = 0; i < N; i++) {
+        A[i] = i;
+        B[i] = 2 * i;
+    }
+    #pragma omp parallel for
+    for (int i = 0; i < N; i++) {
+        C[i] = A[i] + B[i];
+    }
+    printf("Arrays are:\n");
+    printf("A:");
+    for(int i=0;i<15;i++) printf("%d ",A[i]);
+    printf("\nB:");
+    for(int i=0;i<15;i++) printf("%d ",B[i]);
+    printf("\nAfter addition\n");
+    for (int i = 0; i < 15; i++) {
+        printf("%d ", C[i]);
+    }
+    printf("\n");
+    return 0;
+}
+[23bcs115@mepcolinux ex8]$g++ p1.c -fopenmp
+[23bcs115@mepcolinux ex8]$./a.out
+Addition of two Large Arrays
+Arrays are:
+A:0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 
+B:0 2 4 6 8 10 12 14 16 18 20 22 24 26 28 
+After addition
+0 3 6 9 12 15 18 21 24 27 30 33 36 39 42 
+[23bcs115@mepcolinux ex8]$
+[23bcs115@mepcolinux ex8]$cat p2.c
+#include <stdio.h>
+#include <omp.h>
+#include<time.h>
+#include<stdlib.h>
+#define N 15
+int main() {
+    printf("Add constatnt to each element\n");
+    int A[N];
+    int constant;
+    printf("Enter  constatnt to add:");
+    scanf("%d",&constant);
+    srand(time(NULL));
+    for (int i = 0; i < N; i++) {
+        A[i] = rand()%100;
+    }
+    printf("Original Array\n");
+    for(int i=0;i<N;i++)
+        printf("%d ",A[i]);
+    #pragma omp parallel for
+    for (int i = 0; i < N; i++) {
+        A[i] = A[i] + constant;
+    }
+    printf("\nAfter constatnt addition:\n");
+    for (int i = 0; i < N; i++) {
+        printf("%d ", A[i]);
+    }
+    printf("\n");
+    return 0;
+}
+[23bcs115@mepcolinux ex8]$g++ p2.c -fopenmp
+[23bcs115@mepcolinux ex8]$./a.out
+Add constatnt to each element
+Enter  constatnt to add:7
+Original Array
+83 80 58 83 68 19 89 78 79 88 62 60 53 18 27 
+After constatnt addition:
+90 87 65 90 75 26 96 85 86 95 69 67 60 25 34 
+[23bcs115@mepcolinux ex8]$
+[23bcs115@mepcolinux ex8]$cat p3.c
+#include<stdio.h>
+#include<stdlib.h>
+#include<omp.h>
+int main()
+{
+   printf("Mirror Matrix printing\n");
+   int dim;
+   int **A;
+   printf("Enter matrix dimension:");
+   scanf("%d",&dim);
+   A=(int**)malloc(dim*sizeof(int*));
+   for(int i=0;i<dim;i++)
+      A[i]=(int*)malloc(dim*sizeof(int));
+   printf("Enter the matrix:\n");
+   for(int i=0;i<dim;i++)
+   {
+      for(int j=0;j<dim;j++)
+      {
+	 scanf("%d",&A[i][j]);
+      }
+   }
+   int **B;
+   B=(int**)malloc(dim*sizeof(int*));
+   for(int i=0;i<dim;i++)
+      B[i]=(int*)malloc(dim*sizeof(int));
+ #pragma omp parallel for collapse(2)
+   for(int i=0;i<dim;i++)
+   {
+      for(int j=0;j<dim;j++)
+      {
+	 B[i][dim-j-1]=A[i][j];
+      }
+   }
+   printf("The Mirror matrix is:\n");
+   for(int i=0;i<dim;i++)
+   {
+      for(int j=0;j<dim;j++)
+      {
+         printf("%d ",B[i][j]);
+      }
+   printf("\n");
+   }
+   return 0;
+}
+[23bcs115@mepcolinux ex8]$g++ p3.c -fopenmp
+[23bcs115@mepcolinux ex8]$./a.out
+Mirror Matrix printing
+Enter matrix dimension:4
+Enter the matrix:
+1 2 3 4
+4 5 6 7
+6 7 8 9
+0 4 5 3
+The Mirror matrix is:
+4 3 2 1 
+7 6 5 4 
+9 8 7 6 
+3 5 4 0 
+[23bcs115@mepcolinux ex8]$
+[23bcs115@mepcolinux ex8]$cat p4.c -fopenmp
+#include<stdio.h>
+#include<stdlib.h>
+#include<omp.h>
+int main()
+{
+   printf("Running Minimum:\n");
+   int size;
+   int *arr;int *arr1;
+   printf("Enter the size:");
+   scanf("%d",&size);
+   arr=(int*)malloc(size*sizeof(int));
+   arr1=(int*)malloc(size*sizeof(int));
+   printf("Enter the array:\n");
+   for(int i=0;i<size;i++)
+       scanf("%d",&arr[i]);
+   int min=arr[0];
+   arr1[0]=min;
+ #pragma omp parallel for
+   for(int i=0;i<size;i++)
+   {
+      if(arr[i]<min)
+      {
+	 arr1[i]=arr[i];
+      }
+      else
+         arr1[i]=min;
+   }
+   printf("The running minimum(s):");
+   for(int i=0;i<size;i++)
+      printf("%d ",arr1[i]);
+   printf("\n");
+   return 0;
+}
+[23bcs115@mepcolinux ex8]$
+[23bcs115@mepcolinux ex8]$g++ p4.c -fopenmp
+[23bcs115@mepcolinux ex8]$./a.out
+Running Minimum:
+Enter the size:6
+Enter the array:
+56 3 65 7 1 8
+The running minimum(s):56 3 56 7 1 8 
+[23bcs115@mepcolinux ex8]$
+[23bcs115@mepcolinux ex8]$exit
+exit
+
+Script done on Wednesday 25 March 2026 03:19:44 PM IST
+

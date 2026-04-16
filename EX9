@@ -1,0 +1,180 @@
+[23bcs115@mepcolinux ex9]$cat trap.c
+#include <stdio.h>
+#include <omp.h>
+#include <math.h>
+double f(double x) {
+    return x * x;
+}
+
+int main() {
+    int n, i;
+    double a, b, h, sum = 0.0;
+    printf("TRAPEZOIDAL SUM\n");
+    printf("Enter lower limit a: ");
+    scanf("%lf", &a);
+    printf("Enter upper limit b: ");
+    scanf("%lf", &b);
+    printf("Enter number of intervals n: ");
+    scanf("%d", &n);
+    h = (b - a) / n;
+    #pragma omp parallel for reduction(+:sum)
+    for (i = 1; i < n; i++) {
+        sum += f(a + i * h);
+    }
+    double result = h * ((f(a) + f(b)) / 2.0 + sum);
+    printf("Trapezoidal Sum = %lf\n", result);
+    return 0;
+}
+[23bcs115@mepcolinux ex9]$cat sumk.c
+#include<stdlib.h>
+#include<stdio.h>
+#include<omp.h>
+int main()
+{
+   int n,k;
+   int **mat;
+   printf("SUM OF ELEMENTS DIVISIBLE BY K\n");
+   printf("Enter the dimension of matrix:");
+   scanf("%d",&n);
+   mat=(int**)malloc(n*sizeof(int*));
+   for(int i=0;i<n;i++)
+      mat[i]=(int*)malloc(n*sizeof(int));
+   printf("Enter the matrix elements:\n");
+   for(int i=0;i<n;i++)
+   {
+      for(int j=0;j<n;j++)
+      {
+	 scanf("%d",&mat[i][j]);
+      }
+   }
+   printf("Enter the k value:");
+   scanf("%d",&k);
+   int sum=0;
+#pragma omp parallel for collapse(2) reduction(+:sum)
+   for(int i=0;i<n;i++)
+   {
+      for(int j=0;j<n;j++)
+      {
+	 if(mat[i][j]%k ==0)
+	    sum+=mat[i][j];
+      }
+   }
+   printf("The Sum of numbers divisible by %d in matrix is %d\n",k,sum);
+   return 0;
+}
+[23bcs115@mepcolinux ex9]$cat saddlec.c
+#include<stdio.h>
+#include<stdlib.h>
+#include<omp.h>
+
+int main()
+{
+   int n, count = 0;
+   int **mat;
+   printf("COUNT OF SADDLE POINTS\n");
+   printf("Enter dimension of the matrix: ");
+   scanf("%d", &n);
+
+   mat = (int**)malloc(n * sizeof(int*));
+   for(int i = 0; i < n; i++)
+      mat[i] = (int*)malloc(n * sizeof(int));
+
+   printf("Enter the elements:\n");
+   for(int i = 0; i < n; i++)
+   {
+      for(int j = 0; j < n; j++)
+      {
+         scanf("%d", &mat[i][j]);
+      }
+   }
+#pragma omp parallel for reduction(+:count)
+   for(int i = 0; i < n; i++)
+   {
+      for(int j = 0; j < n; j++)
+      {
+         int isMin = 1, isMax = 1;
+         for(int k = 0; k < n; k++)
+         {
+            if(mat[i][k] < mat[i][j])
+               isMin = 0;
+         }
+         for(int k = 0; k < n; k++)
+         {
+            if(mat[k][j] > mat[i][j])
+               isMax = 0;
+         }
+         if(isMin && isMax)
+            count++;
+      }
+   }
+   printf("The count of saddle points: %d\n", count);
+   return 0;
+}
+
+[23bcs115@mepcolinux ex9]$cat res.txt
+[23bcs115@mepcolinux ex9]$g++ trap.c
+[23bcs115@mepcolinux ex9]$./a.out
+TRAPEZOIDAL SUM
+Enter lower limit a: 3
+Enter upper limit b: 9
+Enter number of intervals n: 2
+Trapezoidal Sum = 243.000000
+[23bcs115@mepcolinux ex9]$
+[23bcs115@mepcolinux ex9]$
+[23bcs115@mepcolinux ex9]$g++ sumk.c
+[23bcs115@mepcolinux ex9]$./a.out
+SUM OF ELEMENTS DIVISIBLE BY K
+Enter the dimension of matrix:3
+Enter the matrix elements:
+1 2 3
+4 5 6
+7 8 9
+Enter the k value:3
+The Sum of numbers divisible by 3 in matrix is 18
+[23bcs115@mepcolinux ex9]$
+[23bcs115@mepcolinux ex9]$g++ sumk.c
+[23bcs115@mepcolinux ex9]$./a.out
+SUM OF ELEMENTS DIVISIBLE BY K
+Enter the dimension of matrix:3
+Enter the matrix elements:
+1 2 3
+4 5 6
+7 8 9
+Enter the k value:17
+The Sum of numbers divisible by 17 in matrix is 0
+[23bcs115@mepcolinux ex9]$
+[23bcs115@mepcolinux ex9]$
+[23bcs115@mepcolinux ex9]$
+[23bcs115@mepcolinux ex9]$
+[23bcs115@mepcolinux ex9]$g++ saddlec.c
+[23bcs115@mepcolinux ex9]$./a.out
+COUNT OF SADDLE POINTS
+Enter dimension of the matrix: 2
+Enter the elements:
+2 1
+1 0
+The count of saddle points: 1
+[23bcs115@mepcolinux ex9]$./a.out
+COUNT OF SADDLE POINTS
+Enter dimension of the matrix: 3
+Enter the elements:
+1 2 3
+3 2 1
+2 2 2
+The count of saddle points: 1
+[23bcs115@mepcolinux ex9]$
+[23bcs115@mepcolinux ex9]$./a.out
+COUNT OF SADDLE POINTS
+Enter dimension of the matrix: 4
+Enter the elements:
+1 2 3 4
+2 3 4 5
+3 4 5 6
+4 5 6 7
+The count of saddle points: 1
+[23bcs115@mepcolinux ex9]$
+[23bcs115@mepcolinux ex9]$exit
+exit
+
+Script done on Wednesday 15 April 2026 04:10:30 PM IST
+

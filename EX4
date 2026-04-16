@@ -1,0 +1,118 @@
+[23bcs115@mepcolinux hpc]$cat ex4.prn
+Script started on 2026-02-04 16:25:07+0530
+To run a command as administrator (user "root"), use "sudo <command>".
+See "man sudo_root" for details.
+
+III-B2@cil31$ cat mp1.c
+#include<mpi.h>
+#include<stdio.h>
+#include<stdlib.h>
+#define name_len 25
+typedef struct{
+	char name[name_len];
+	int roll;
+	int marks;
+	char grade;
+}Student;
+char findGrade(int marks){
+	if(marks>90) return 'O';
+	else if(marks>=75) return 'A';
+	else if(marks>=60) return 'B';
+	else if(marks>=50) return 'C';
+	else return 'F';
+}
+int main(){
+	int rank,size,n,i;
+	Student *students=NULL;
+	Student *local_students;
+	MPI_Datatype MPI_STUDENT;
+	MPI_Init(NULL,NULL);
+	MPI_Comm_rank(MPI_COMM_WORLD,&rank);
+	MPI_Comm_size(MPI_COMM_WORLD,&size);
+        Student temp;
+	int blocklengths[4]={name_len,1,1,1};
+	MPI_Aint displacements[4],addr[4];
+	MPI_Datatype types[4]={MPI_CHAR,MPI_INT,MPI_INT,MPI_CHAR};
+	MPI_Get_address(&temp.name,&addr[0]);
+        MPI_Get_address(&temp.roll,&addr[1]);
+        MPI_Get_address(&temp.marks,&addr[2]);
+        MPI_Get_address(&temp.grade,&addr[3]);
+        for(i=0;i<4;i++)
+		displacements[i]=addr[i]-addr[0];
+	MPI_Type_create_struct(4,blocklengths,displacements,types,&MPI_STUDENT);
+	MPI_Type_commit(&MPI_STUDENT);
+        int total_count = 0;
+        if (rank == 0) {
+            FILE *fp = fopen("student.txt", "r");
+            if (fp==NULL) {
+               printf("Error: Could not open input file\n");
+               MPI_Abort(MPI_COMM_WORLD, 1);
+            }
+            fscanf(fp,"%d",&n);
+	    if(n%size!=0){printf("No. of students must be equally divisible by number of processes"); fflush(stdout); MPI_Abort(MPI_COMM_WORLD,1);}
+            students = (Student*)malloc(100 * sizeof(Student));
+            for(i=0;i<n;i++){
+                     fscanf(fp, "%s %d %d", students[i].name,
+                     &students[i].roll,
+                     &students[i].marks);
+                     students[i].grade='-';
+            }
+            fclose(fp);
+       }
+       MPI_Bcast(&n,1, MPI_INT, 0, MPI_COMM_WORLD);
+       int local_n= n / size;
+       local_students= (Student*)malloc(local_n * sizeof(Student));
+       MPI_Scatter(students, local_n, MPI_STUDENT, local_students, local_n, MPI_STUDENT, 0, MPI_COMM_WORLD);
+       for (int i = 0; i < local_n; i++) {
+          local_students[i].grade = findGrade(local_students[i].marks);
+       }
+       MPI_Gather(local_students, local_n, MPI_STUDENT,students, local_n, MPI_STUDENT, 0, MPI_COMM_WORLD);
+       if (rank == 0) 
+       {
+           FILE *out = fopen("grades.txt", "w");
+	   fprintf(out,"Name\tRollno.\tMarks\tGrade\n");
+           for (int i = 0; i <n; i++) {
+                      fprintf(out, "%s\t%d\t%d\t%c\n",
+                      students[i].name, students[i].roll,
+                      students[i].marks, students[i].grade);
+            }
+           fclose(out);
+           printf("Grades successfully calculated\n");
+           free(students);
+       }
+       free(local_students);
+       MPI_Type_free(&MPI_STUDENT);
+       MPI_Finalize();
+       return 0;
+}
+III-B2@cil31~$ cat student.txt
+5
+sai 101 85
+ram 102 50
+kumar 103 72
+raj 104 92
+mahesh 105 44
+III-B2@cil31: ~$ mpicc mp1.c
+III-B2@cil31: ~$ mpirun -np 5 ./a.out
+Grades successfully calculated
+III-B2@cil31: ~$ cat grades.txt
+Name	Rollno.	Marks	Grade
+sai	101	85	A
+ram	102	50	C
+kumar	103	72	B
+raj	104	92	O
+mahesh	105	44	F
+III-B2@cil31~$mpirun -np 7 ./a.out
+No. of students must be equally divisible by number of processes--------------------------------------------------------------------------
+MPI_ABORT was invoked on rank 0 in communicator MPI_COMM_WORLD
+with errorcode 1.
+
+NOTE: invoking MPI_ABORT causes Open MPI to kill all MPI processes.
+You may or may not see output from other processes, depending on
+exactly when Open MPI kills them.
+--------------------------------------------------------------------------
+III-B2@cil31~$ exit
+exit
+
+Script done on 2026-02-04 16:25:57+0530
+
