@@ -1,0 +1,388 @@
+[23bcs115@mepcolinux ex10]$cat pc.c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <omp.h>
+
+#define MAX_QUEUE 10
+#define MAX_LINE 100
+#define NUM_PRODUCERS 2
+#define NUM_CONSUMERS 2
+
+char *queue[MAX_QUEUE];
+int front = 0, rear = 0, count = 0;
+
+omp_lock_t lock;
+
+int producers_done = 0;
+
+void enqueue(char *line)
+{
+    omp_set_lock(&lock);
+
+    if (count < MAX_QUEUE)
+    {
+        queue[rear] = strdup(line);
+        rear = (rear + 1) % MAX_QUEUE;
+        count++;
+    }
+
+    omp_unset_lock(&lock);
+}
+
+char* dequeue()
+{
+    char *line = NULL;
+
+    omp_set_lock(&lock);
+
+    if (count > 0)
+    {
+        line = queue[front];
+        front = (front + 1) % MAX_QUEUE;
+        count--;
+    }
+
+    omp_unset_lock(&lock);
+
+    return line;
+}
+
+void producer(int id)
+{
+    char filename[20];
+    sprintf(filename, "file%d.txt", id + 1);
+
+    FILE *fp = fopen(filename, "r");
+    if (!fp)
+    {
+#pragma omp critical
+        printf("Producer %d: Cannot open %s\n", id, filename);
+#pragma omp atomic
+        producers_done++;
+        return;
+    }
+
+    char line[MAX_LINE];
+
+    while (fgets(line, MAX_LINE, fp))
+    {
+        while (1)
+        {
+            omp_set_lock(&lock);
+            if (count < MAX_QUEUE)
+            {
+                queue[rear] = strdup(line);
+                rear = (rear + 1) % MAX_QUEUE;
+                count++;
+
+#pragma omp critical
+                printf("Producer %d produced: %s", id, line);
+
+                omp_unset_lock(&lock);
+                break;
+            }
+            omp_unset_lock(&lock);
+        }
+    }
+
+    fclose(fp);
+
+#pragma omp critical
+    printf("Producer %d finished\n", id);
+
+#pragma omp atomic
+    producers_done++;
+}
+
+void consumer(int id)
+{
+    while (1)
+    {
+        char *line = dequeue();
+
+        if (line == NULL)
+        {
+            if (producers_done == NUM_PRODUCERS)
+                break;
+            continue;
+        }
+
+        char *token = strtok(line, " \t\n");
+
+        while (token != NULL)
+        {
+#pragma omp critical
+            printf("Consumer %d: %s\n", id, token);
+
+            token = strtok(NULL, " \t\n");
+        }
+
+        free(line);
+    }
+
+#pragma omp critical
+    printf("Consumer %d exiting\n", id);
+}
+
+int main()
+{
+    omp_init_lock(&lock);
+
+#pragma omp parallel num_threads(NUM_PRODUCERS + NUM_CONSUMERS)
+    {
+        int tid = omp_get_thread_num();
+
+        if (tid < NUM_PRODUCERS)
+            producer(tid);
+        else
+            consumer(tid - NUM_PRODUCERS);
+    }
+
+    omp_destroy_lock(&lock);
+    return 0;
+}
+
+[23bcs115@mepcolinux ex10]$g++ pc.c -fopenmp
+[23bcs115@mepcolinux ex10]$./a.out
+Producer 0 produced: hi i am sai
+Producer 1 produced: i like cricket
+Consumer 0: hi
+Consumer 0: i
+Consumer 0: am
+Consumer 0: sai
+Producer 0 produced: i am cse-b
+Consumer 0: i
+Consumer 0: like
+Consumer 0: cricket
+Producer 0 produced: i am at mepco
+Consumer 0: i
+Consumer 0: am
+Consumer 0: cse-b
+Producer 1 produced: i like steve smith
+Consumer 0: i
+Consumer 0: am
+Consumer 0: at
+Producer 0 produced: i am from sivakasi../
+Consumer 0: mepco
+Consumer 0: i
+Producer 0 finished
+Consumer 0: like
+Consumer 0: steve
+Consumer 0: smith
+Producer 1 produced: india won 2026 t20 world cup
+Consumer 0: india
+Consumer 0: won
+Consumer 0: 2026
+Consumer 0: t20
+Consumer 0: world
+Consumer 0: cup
+Consumer 1: i
+Producer 1 produced: philip hughes 64 not out.
+Consumer 0: philip
+Consumer 0: hughes
+Consumer 0: 64
+Consumer 0: not
+Producer 1 finished
+Consumer 0: out.
+Consumer 0 exiting
+Consumer 1 exiting
+[23bcs115@mepcolinux ex10]$cat 2.c
+#include <stdio.h>
+#include <stdlib.h>
+#include <omp.h>
+#include <time.h>
+
+#define QUEUE_SIZE 20
+#define NUM_ITEMS 10
+#define NUM_PRODUCERS 2
+#define NUM_CONSUMERS 2
+
+int queue[QUEUE_SIZE];
+int front = 0, rear = 0, count = 0;
+
+omp_lock_t lock;
+
+float mean = 0, variance = 0;
+int producers_done = 0;
+
+int dequeue()
+{
+    int val = -1;
+
+    omp_set_lock(&lock);
+
+    if (count > 0)
+    {
+        val = queue[front];
+        front = (front + 1) % QUEUE_SIZE;
+        count--;
+    }
+
+    omp_unset_lock(&lock);
+
+    return val;
+}
+
+void producer(int id)
+{
+    int produced = 0;
+    unsigned int seed = time(NULL) + id;
+
+    while (produced < NUM_ITEMS)
+    {
+        int value = rand_r(&seed) % 10;
+
+        while (1)
+        {
+            omp_set_lock(&lock);
+
+            if (count < QUEUE_SIZE)
+            {
+                queue[rear] = value;
+                rear = (rear + 1) % QUEUE_SIZE;
+                count++;
+
+#pragma omp critical
+                {
+                    printf("Producer %d produced: %d\n", id, value);
+                }
+
+                omp_unset_lock(&lock);
+                break;
+            }
+
+            omp_unset_lock(&lock);
+        }
+
+        produced++;
+    }
+
+#pragma omp atomic
+    producers_done++;
+}
+
+void consumer(int id)
+{
+    int arr[NUM_ITEMS];
+    int consumed = 0;
+
+    while (1)
+    {
+        int val = dequeue();
+
+        if (val == -1)
+        {
+            if (producers_done == NUM_PRODUCERS)
+                break;
+            continue;
+        }
+
+#pragma omp critical
+        {
+            printf("Consumer %d consumed: %d\n", id, val);
+        }
+
+        arr[consumed++] = val;
+
+        if (consumed == NUM_ITEMS)
+            break;
+    }
+
+    float local_mean = 0;
+    for (int i = 0; i < consumed; i++)
+        local_mean += arr[i];
+
+    if (consumed > 0)
+        local_mean /= consumed;
+
+#pragma omp atomic
+    mean += local_mean;
+
+    float local_var = 0;
+    for (int i = 0; i < consumed; i++)
+        local_var += (arr[i] - local_mean) * (arr[i] - local_mean);
+
+    if (consumed > 0)
+        local_var /= consumed;
+
+#pragma omp atomic
+    variance += local_var;
+
+#pragma omp critical
+    {
+        printf("Consumer %d done. Mean=%.2f Variance=%.2f\n", id, local_mean, local_var);
+    }
+}
+
+int main()
+{
+    omp_init_lock(&lock);
+
+    int total_threads = NUM_PRODUCERS + NUM_CONSUMERS;
+
+#pragma omp parallel num_threads(total_threads)
+    {
+        int id = omp_get_thread_num();
+
+        if (id < NUM_PRODUCERS)
+            producer(id);
+        else
+            consumer(id - NUM_PRODUCERS);
+    }
+
+    printf("\nFinal Mean (sum): %.2f\n", mean);
+    printf("Final Variance (sum): %.2f\n", variance);
+
+    omp_destroy_lock(&lock);
+    return 0;
+}
+
+[23bcs115@mepcolinux ex10]$g++ 2.c -fopenmp
+[23bcs115@mepcolinux ex10]$./a.out
+Producer 0 produced: 8
+Producer 1 produced: 6
+Producer 1 produced: 3
+Producer 1 produced: 2
+Producer 1 produced: 8
+Producer 1 produced: 4
+Producer 1 produced: 1
+Producer 1 produced: 9
+Producer 1 produced: 7
+Producer 1 produced: 5
+Producer 1 produced: 4
+Consumer 0 consumed: 8
+Consumer 1 consumed: 6
+Consumer 1 consumed: 2
+Consumer 1 consumed: 8
+Consumer 1 consumed: 4
+Consumer 1 consumed: 1
+Consumer 0 consumed: 3
+Producer 0 produced: 4
+Producer 0 produced: 2
+Producer 0 produced: 8
+Consumer 0 consumed: 9
+Consumer 0 consumed: 5
+Consumer 1 consumed: 7
+Consumer 0 consumed: 4
+Producer 0 produced: 6
+Consumer 1 consumed: 4
+Producer 0 produced: 8
+Producer 0 produced: 1
+Producer 0 produced: 6
+Producer 0 produced: 3
+Producer 0 produced: 2
+Consumer 1 consumed: 2
+Consumer 1 consumed: 6
+Consumer 1 consumed: 8
+Consumer 0 consumed: 8
+Consumer 0 consumed: 1
+Consumer 0 consumed: 6
+Consumer 1 done. Mean=4.80 Variance=5.96
+Consumer 0 consumed: 3
+Consumer 0 consumed: 2
+Consumer 0 done. Mean=4.90 Variance=6.89
+
+Final Mean (sum): 9.70
+Final Variance (sum): 12.85
+[23bcs115@mepcolinux ex10]$exit
