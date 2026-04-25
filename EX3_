@@ -80,5 +80,3 @@ exactly when Open MPI kills them.
 Total elements must be divisible by no. of processes$ 
 III-B2@cil31~$ exit
 exit
-
-
