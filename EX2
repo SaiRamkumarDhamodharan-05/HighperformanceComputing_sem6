@@ -259,4 +259,3 @@ Enter the dimension of the matrix:1000
 Serial execution time for dimension 1000x1000: 20.956693 seconds
 [23bcs115@mepcolinux ex2]$exit
 exit
-
